@@ -12,7 +12,7 @@ class ClienteFinalAdmin(admin.ModelAdmin):
 
 @admin.register(Chamado)
 class ChamadoAdmin(admin.ModelAdmin):
-    list_display = ('cliente_final', 'assunto', 'status', 'cliente', 'usuario', 'criado_em')
+    list_display = ("id",'cliente_final', 'assunto', 'status', 'cliente', 'usuario', 'criado_em')
     list_filter = ('status', 'cliente')
     search_fields = ('cliente_final__nome', 'assunto')
     autocomplete_fields = ['cliente_final', 'usuario']

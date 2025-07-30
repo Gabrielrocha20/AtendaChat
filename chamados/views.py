@@ -4,6 +4,7 @@ import os
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.http import Http404
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
@@ -32,6 +33,20 @@ class ChamadoListCreateView(APIView):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+class ChamadoStatusUpdateView(APIView):
+    def patch(self, request, pk):
+        chamado = get_object_or_404(Chamado, pk=pk)
+        novo_status = request.data.get('status')
+
+        if novo_status not in dict(Chamado.STATUS_CHOICES):
+            return Response({'error': 'Status inválido.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        chamado.status = novo_status
+        chamado.save()
+
+        serializer = ChamadoSerializer(chamado)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class ChamadoDetailView(APIView):
@@ -167,7 +182,7 @@ class ResponderChamadoView(APIView):
             usuario = CustomUser.objects.get(pk=usuario_id)
         except CustomUser.DoesNotExist:
             return Response({'error': 'Usuário não encontrado'}, status=404)
-
+        print(usuario)
         # Pega o cliente associado ao usuário
         cliente = usuario.cliente
         if not cliente or not cliente.evolution_instance_id:
@@ -178,14 +193,14 @@ class ResponderChamadoView(APIView):
             chamado = Chamado.objects.get(pk=pk)
         except Chamado.DoesNotExist:
             return Response({'error': 'Chamado não encontrado'}, status=404)
-
+        print(chamado)
         # Associa o usuário e a instância ao chamado, se ainda não definidos
         if not chamado.usuario:
             chamado.usuario = usuario
             chamado.save()
 
         # Formata o texto com o nome do usuário
-        texto_formatado = f"**{usuario.nome}**: {texto}"
+        texto_formatado = f"*{usuario.nome}*: {texto}"
 
         Mensagem.objects.create(
             chamado=chamado,
@@ -193,12 +208,12 @@ class ResponderChamadoView(APIView):
             texto=texto_formatado,
             data=timezone.now()
         )
-
+        print(cliente.evolution_instance_id)
         # Envia a mensagem via Evolution API
         status_code, resposta = enviar_mensagem_whatsapp(
             numero=chamado.cliente_final.numero_whatsapp,
             texto=texto_formatado,
-            instancia=cliente.evolution_instance_id
+            instancia=cliente.nome_fantasia
         )
 
         return Response({

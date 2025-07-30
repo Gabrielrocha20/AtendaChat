@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'channels',
     'rest_framework',
     'clientes',
     'usuarios',
@@ -73,6 +74,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'settings.wsgi.application'
+ASGI_APPLICATION = 'settings.asgi.application'
 
 
 # Database
@@ -141,6 +143,15 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10,
+}
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("127.0.0.1", 6380)],
+        },
+    },
 }
 AUTH_USER_MODEL = 'usuarios.CustomUser'
 EVOLUTION_API_TOKEN = '429683C4C977415CAAFCCE10F7D57E11'

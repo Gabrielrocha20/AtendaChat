@@ -1,16 +1,25 @@
-"""
-ASGI config for settings project.
-
-It exposes the ASGI callable as a module-level variable named ``application``.
-
-For more information on this file, see
-https://docs.djangoproject.com/en/5.2/howto/deployment/asgi/
-"""
+# atenda_chat/asgi.py
 
 import os
 
+import django
+from channels.auth import AuthMiddlewareStack
+from channels.routing import ProtocolTypeRouter, URLRouter
 from django.core.asgi import get_asgi_application
+from dotenv import load_dotenv
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'settings.settings')
+from chamados.routing import \
+    websocket_urlpatterns  # importa suas rotas websocket
 
-application = get_asgi_application()
+load_dotenv()
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings.settings")
+django.setup()
+
+application = ProtocolTypeRouter({
+    "http": get_asgi_application(),
+    "websocket": AuthMiddlewareStack(
+        URLRouter(
+            websocket_urlpatterns
+        )
+    ),
+})
