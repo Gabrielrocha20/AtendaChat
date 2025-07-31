@@ -4,7 +4,7 @@ from asgiref.sync import sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
 from django.utils import timezone
 
-from .utils import enviar_mensagem_whatsapp  # ajuste o import
+from .utils import enviar_mensagem_whatsapp
 
 
 class ChatConsumer(AsyncWebsocketConsumer):
@@ -29,23 +29,35 @@ class ChatConsumer(AsyncWebsocketConsumer):
         texto = data.get('texto')
         usuario_id = data.get('usuario_id')
 
+        if not texto or not usuario_id:
+            return  # você pode enviar uma resposta de erro se quiser
+
         from chamados.models import Chamado, Mensagem
         from usuarios.models import CustomUser
 
         try:
-            chamado = await sync_to_async(Chamado.objects.get)(pk=self.chamado_id)
-            usuario = await sync_to_async(CustomUser.objects.get)(pk=usuario_id)
-        except Exception:
+            chamado = await sync_to_async(Chamado.objects.select_related('cliente_final').get)(pk=self.chamado_id)
+            usuario = await sync_to_async(CustomUser.objects.select_related('cliente').get)(pk=usuario_id)
+        except (Chamado.DoesNotExist, CustomUser.DoesNotExist):
             return
 
+        # Associa o usuário ao chamado se ainda não estiver definido
+        if not chamado.usuario_id:
+            chamado.usuario = usuario
+            await sync_to_async(chamado.save)()
+
+        # Formata o texto
+        texto_formatado = f"*{usuario.nome}*: {texto}"
+
+        # Salva a mensagem no banco
         mensagem = await sync_to_async(Mensagem.objects.create)(
             chamado=chamado,
             origem='agente',
-            texto=f"*{usuario.nome}*: {texto}",
+            texto=texto_formatado,
             data=timezone.now()
         )
 
-        # Enviar a mensagem para o grupo WebSocket (como antes)
+        # Envia para o grupo WebSocket (broadcast)
         await self.channel_layer.group_send(
             self.room_group_name,
             {
@@ -58,21 +70,12 @@ class ChatConsumer(AsyncWebsocketConsumer):
             }
         )
 
-        # Agora, chamar a função que envia via Evolution API para o WhatsApp
-        # Use sync_to_async para chamar função síncrona em async
-        @sync_to_async
-        def get_numero():
-            return chamado.cliente_final.numero_whatsapp
-        @sync_to_async
-        def get_nome_fantasia_do_cliente(usuario):
-            # Essa função é síncrona, mas será chamada async-safe
-            return usuario.cliente.nome_fantasia
-        
-        numero = await get_numero()
-        nome_fantasia = await get_nome_fantasia_do_cliente(usuario)
+        # Envia a mensagem via Evolution API
+        numero = chamado.cliente_final.numero_whatsapp
+        nome_fantasia = usuario.cliente.nome_fantasia
         await sync_to_async(enviar_mensagem_whatsapp)(
             numero=numero,
-            texto=mensagem.texto,
+            texto=texto_formatado,
             instancia=nome_fantasia
         )
 

@@ -1,6 +1,8 @@
 import base64
 import os
 
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.http import Http404
@@ -34,21 +36,35 @@ class ChamadoListCreateView(APIView):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-class ChamadoStatusUpdateView(APIView):
+class ChamadoPartialUpdateView(APIView):
     def patch(self, request, pk):
         chamado = get_object_or_404(Chamado, pk=pk)
-        novo_status = request.data.get('status')
+        data = request.data
 
-        if novo_status not in dict(Chamado.STATUS_CHOICES):
-            return Response({'error': 'Status inválido.'}, status=status.HTTP_400_BAD_REQUEST)
+        # Atualiza o status, se informado
+        if 'status' in data:
+            novo_status = data['status']
+            if novo_status not in dict(Chamado.STATUS_CHOICES):
+                return Response({'error': 'Status inválido.'}, status=status.HTTP_400_BAD_REQUEST)
+            chamado.status = novo_status
 
-        chamado.status = novo_status
+        # Atualiza o atendente (usuario), se informado
+        if 'usuario_id' in data:
+            try:
+                usuario = CustomUser.objects.get(pk=data['usuario_id'])
+                chamado.usuario = usuario
+            except CustomUser.DoesNotExist:
+                return Response({'error': 'Usuário (atendente) não encontrado.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Atualiza o assunto, se informado
+        if 'assunto' in data:
+            chamado.assunto = data['assunto']
+
+        # Você pode incluir outros campos aqui, como cliente_final, etc.
+
         chamado.save()
-
         serializer = ChamadoSerializer(chamado)
         return Response(serializer.data, status=status.HTTP_200_OK)
-
-
 class ChamadoDetailView(APIView):
     def get_object(self, pk):
         try:
@@ -88,7 +104,7 @@ class WebhookChamadoView(APIView):
         message_data = data.get("data", {})
         nome = message_data.get("pushName", "Cliente")
 
-        numero = sender.split("@")[0]
+        numero = data["data"]["key"]["remoteJid"].split("@")[0]
 
         # Busca o cliente
         try:
@@ -138,12 +154,25 @@ class WebhookChamadoView(APIView):
                 texto = "[Imagem recebida]"
 
         if texto:
-            Mensagem.objects.create(
+            mensagem = Mensagem.objects.create(
                 chamado=chamado,
                 origem="cliente",
                 texto=texto,
                 anexo=anexo,
                 data=timezone.now()
+            )
+            # 🔥 Envia a mensagem para o WebSocket do grupo do chamado
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f"chamado_{chamado.id}",
+                {
+                    "type": "chat.message",
+                    "mensagem": {
+                        "texto": texto,
+                        "usuario": nome,
+                        "data": mensagem.data.isoformat(),
+                    }
+                }
             )
 
         return Response({"success": True}, status=status.HTTP_201_CREATED)

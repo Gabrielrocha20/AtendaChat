@@ -1,7 +1,7 @@
 from django.urls import path
 
 from .views import (ChamadoDetailView, ChamadoListCreateView,
-                    ChamadoStatusUpdateView, ClienteFinalDetailView,
+                    ChamadoPartialUpdateView, ClienteFinalDetailView,
                     ClienteFinalListCreateView, MensagemDetailView,
                     MensagemListCreateView, ResponderChamadoView,
                     WebhookChamadoView)
@@ -12,7 +12,7 @@ urlpatterns = [
     path('<int:pk>/', ChamadoDetailView.as_view(), name='chamado-detail'),
     path('webhook/', WebhookChamadoView.as_view(), name='chamado-webhook'),
     path('<int:pk>/responder/', ResponderChamadoView.as_view(), name='chamado-responder'),
-    path('<int:pk>/status/', ChamadoStatusUpdateView.as_view(), name='chamado-atualizar-status'),
+    path('<int:pk>/atualizar/', ChamadoPartialUpdateView.as_view(), name='chamado-atualizar'),
 
     # Clientes Finais
     path('clientes-finais/', ClienteFinalListCreateView.as_view(), name='clientefinal-list-create'),
